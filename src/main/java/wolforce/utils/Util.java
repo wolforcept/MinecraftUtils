@@ -310,7 +310,7 @@ public class Util {
 
 	public static ItemStack stackListFind_moreOrEqualNr(ItemStack stack1, List<ItemStack> possibleInputs) {
 		for (ItemStack stack : possibleInputs) {
-			if (ItemStack.isSameItemSameTags(stack, stack1) && stack.getCount() >= stack1.getCount())
+			if (ItemStack.isSameItemSameTags(stack, stack1) && stack1.getCount() >= stack.getCount())
 				return stack;
 		}
 		return null;

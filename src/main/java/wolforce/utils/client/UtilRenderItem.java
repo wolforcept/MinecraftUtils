@@ -1,6 +1,7 @@
 package wolforce.utils.client;
 
 import com.mojang.blaze3d.platform.Lighting;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Quaternion;
@@ -11,6 +12,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.ItemModelShaper;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.MultiBufferSource.BufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.ItemTransforms;
 import net.minecraft.client.renderer.entity.ItemRenderer;
@@ -38,8 +40,8 @@ public class UtilRenderItem {
 
 	//
 
-	private final PoseStack poseStack;
 	private final ItemStack stack;
+	private PoseStack poseStack;
 	private Vec3 position = null;
 	private Vec3f scale = null;
 	private ColorAction colorAction = null;
@@ -57,13 +59,17 @@ public class UtilRenderItem {
 		return MC.renderBuffers().bufferSource();
 	}
 
-	public static UtilRenderItem init(PoseStack poseStack, ItemStack stack) {
-		return new UtilRenderItem(poseStack, stack);
+	public static UtilRenderItem init(ItemStack stack) {
+		return new UtilRenderItem(stack);
 	}
 
-	private UtilRenderItem(PoseStack poseStack, ItemStack stack) {
-		this.poseStack = poseStack;
+	private UtilRenderItem(ItemStack stack) {
 		this.stack = stack;
+	}
+
+	public UtilRenderItem pose(PoseStack poseStack) {
+		this.poseStack = poseStack;
+		return this;
 	}
 
 	public UtilRenderItem pos(Vec3 position) {
@@ -108,13 +114,48 @@ public class UtilRenderItem {
 	}
 
 	public void renderGui() {
+
+		if (!UtilItemStack.isValid(stack))
+			return;
+
+		PoseStack poseStack = this.poseStack != null ? this.poseStack : RenderSystem.getModelViewStack();
+		MultiBufferSource buffer = this.buffer != null ? this.buffer : MC.renderBuffers().bufferSource();
+		Vec3 position = this.position != null ? this.position : DEFAULT_POSITION;
+		Vec3f scale = this.scale != null ? this.scale : DEFAULT_SCALE;
+		int combinedLight = this.combinedLight != null ? this.combinedLight : DEFAULT_COMBINED_LIGHT;
+		int combinedOverlay = this.combinedOverlay != null ? this.combinedOverlay : DEFAULT_COMBINED_OVERLAY;
+		BakedModel model = renderItem.getModel(stack, null, player, 0);
+
 		poseStack.pushPose();
-		poseStack.translate(0, 0, 100);
+
+		if (scale != null)
+			poseStack.scale(scale.x, scale.y, scale.z);
+		if (position != null)
+			poseStack.translate(position.x, position.y, position.z);
+		if (rotate) {
+			long time = System.currentTimeMillis() / 40 % 360;
+			poseStack.mulPose(new Quaternion(Vector3f.YP, time, true));
+		}
+
 		poseStack.translate(8.0D, 8.0D, 0.0D);
 		poseStack.scale(1.0F, -1.0F, 1.0F);
 		poseStack.scale(16.0F, 16.0F, 16.0F);
-		render();
+		RenderSystem.applyModelViewMatrix();
+		Lighting.setupForFlatItems();
+
+		if (colorAction != null)
+			renderCustomVertexConsumer(stack, ItemTransforms.TransformType.GUI, false, new PoseStack(), buffer,
+					combinedLight, combinedOverlay, model, colorAction);
+		else
+			renderItem.render(stack, ItemTransforms.TransformType.GUI, false, new PoseStack(), buffer, combinedLight,
+					combinedOverlay, model);
+
+		if (buffer instanceof BufferSource bufferSource)
+			bufferSource.endBatch();
+
 		poseStack.popPose();
+		RenderSystem.applyModelViewMatrix();
+
 	}
 
 	public void render() {
@@ -140,10 +181,8 @@ public class UtilRenderItem {
 
 		if (scale != null)
 			poseStack.scale(scale.x, scale.y, scale.z);
-
 		if (position != null)
 			poseStack.translate(position.x, position.y, position.z);
-
 		if (rotate) {
 			long time = System.currentTimeMillis() / 40 % 360;
 			poseStack.mulPose(new Quaternion(Vector3f.YP, time, true));
